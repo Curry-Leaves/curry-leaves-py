@@ -1,6 +1,6 @@
 [project]
 name = "curry-leaves"
-version = "1.3.0"
+version = "1.3.1"
 description = "Curry Leaves — a small, provider-agnostic, multi-agent kernel for building AI agents of any kind: streaming tool-use loop, sub-agents, skills, thinking. The Python port."
 readme = "README.md"
 license = "MIT"
