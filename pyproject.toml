@@ -1,0 +1,67 @@
+[project]
+name = "curry-leaves"
+version = "1.0.0"
+description = "Curry Leaves — a small, provider-agnostic, multi-agent kernel for building AI agents of any kind: streaming tool-use loop, sub-agents, skills, thinking. The Python port."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Ilayanambi Ponramu" }]
+requires-python = ">=3.11"
+keywords = [
+  "agent", "ai-agent", "coding-agent", "llm", "tool-use",
+  "anthropic", "openai", "ollama", "multi-agent", "subagents", "mcp",
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+  "Typing :: Typed",
+]
+dependencies = [
+  "pydantic>=2.7",
+  "httpx>=0.27",
+  "textual>=0.58",
+  "rich>=13.7",
+  "mcp>=1.9",
+]
+
+[project.optional-dependencies]
+dev = [
+  "mypy>=1.10",
+  "pytest>=8.2",
+  "pytest-asyncio>=0.23",
+  "build>=1.2",
+  "twine>=5.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/ilayanambi-ponramu/curry-leaves-py"
+Repository = "https://github.com/ilayanambi-ponramu/curry-leaves-py"
+Issues = "https://github.com/ilayanambi-ponramu/curry-leaves-py/issues"
+Changelog = "https://github.com/ilayanambi-ponramu/curry-leaves-py/blob/main/CHANGELOG.md"
+
+[project.scripts]
+curry-leaves = "curry_leaves.cli.tui.app:main"
+curry = "curry_leaves.cli.tui.app:main"
+curry-leaves-repl = "curry_leaves.cli.chat:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/curry_leaves"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+packages = ["curry_leaves"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
