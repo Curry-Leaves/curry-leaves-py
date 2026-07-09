@@ -40,10 +40,10 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/ilayanambi-ponramu/curry-leaves-py"
-Repository = "https://github.com/ilayanambi-ponramu/curry-leaves-py"
-Issues = "https://github.com/ilayanambi-ponramu/curry-leaves-py/issues"
-Changelog = "https://github.com/ilayanambi-ponramu/curry-leaves-py/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/Curry-Leaves/curry-leaves-py"
+Repository = "https://github.com/Curry-Leaves/curry-leaves-py"
+Issues = "https://github.com/Curry-Leaves/curry-leaves-py/issues"
+Changelog = "https://github.com/Curry-Leaves/curry-leaves-py/blob/main/CHANGELOG.md"
 
 [project.scripts]
 curry-leaves = "curry_leaves.cli.tui.app:main"

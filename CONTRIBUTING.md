@@ -32,7 +32,7 @@ By participating, you agree to keep interactions respectful and constructive.
 Requires **Python 3.11+**.
 
 ```bash
-git clone https://github.com/ilayanambi-ponramu/curry-leaves-py.git
+git clone https://github.com/Curry-Leaves/curry-leaves-py.git
 cd curry-leaves-py
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"

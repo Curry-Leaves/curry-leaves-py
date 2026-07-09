@@ -11,7 +11,7 @@
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="license: MIT"></a>
   <a href="https://www.python.org"><img src="https://img.shields.io/badge/python-%3E%3D3.11-brightgreen.svg" alt="python: >=3.11"></a>
   <a href="./src/curry_leaves/py.typed"><img src="https://img.shields.io/badge/types-included-blue.svg" alt="types included"></a>
-  <a href="https://github.com/ilayanambi-ponramu/curry-leaves-py"><img src="https://img.shields.io/badge/github-repo-181717.svg?logo=github" alt="GitHub repo"></a>
+  <a href="https://github.com/Curry-Leaves/curry-leaves-py"><img src="https://img.shields.io/badge/github-repo-181717.svg?logo=github" alt="GitHub repo"></a>
 </p>
 
 **Curry Leaves** is a general-purpose agent kernel small enough to read in an afternoon. At its core
@@ -320,7 +320,7 @@ tests/         # pytest suite (MCP subsystem, session forking, elision)
 ## Development
 
 ```bash
-git clone https://github.com/ilayanambi-ponramu/curry-leaves-py.git
+git clone https://github.com/Curry-Leaves/curry-leaves-py.git
 cd curry-leaves-py
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
