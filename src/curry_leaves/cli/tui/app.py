@@ -57,6 +57,7 @@ from .widgets import SPIN_FRAMES, CommandMenu, LiveTurn, StatusBar, TranscriptLo
 HELP: list[tuple[str, str]] = [
     ("help", "show this help"),
     ("reset", "start a fresh conversation"),
+    ("fork", "branch a new session from this conversation (/fork [n] — up through the nth user turn)"),
     ("compact", "summarize history to free the context window (/compact [focus])"),
     ("auto", "toggle auto-approve of contained changes (within repo / known hosts)"),
     ("autonomous", "toggle autonomous mode (self-drive, ask only up front)"),
@@ -428,6 +429,18 @@ class CurryLeavesApp(App[None]):
             self.usage = _Usage()
             notice(["(new conversation)"])
             return True
+        if cmd == "fork":
+            rest = text[1:].split(None, 1)
+            arg = rest[1].strip() if len(rest) > 1 else ""
+            upto_turn: Optional[int] = None
+            if arg:
+                try:
+                    upto_turn = int(arg)
+                except ValueError:
+                    notice(["usage: /fork [n] — n is the user turn to fork after (0-indexed)"])
+                    return True
+            self._run_fork(upto_turn)
+            return True
         if cmd == "tools":
             lines = ["tools:"]
             for t in chat.agent.tools.tools():
@@ -480,6 +493,17 @@ class CurryLeavesApp(App[None]):
             self._dispatch(NoticeAction(lines=[f"compaction failed: {err}"]))
         finally:
             self.compacting = False
+            self._refresh_status()
+
+    @work(exclusive=True)
+    async def _run_fork(self, upto_turn: Optional[int]) -> None:
+        old_id = self.chat.session
+        try:
+            new_id = await self.chat.fork(upto_turn)
+            self._dispatch(NoticeAction(lines=[f"forked {old_id} → {new_id}, continuing here"]))
+        except Exception as err:
+            self._dispatch(NoticeAction(lines=[f"fork failed: {err}"]))
+        finally:
             self._refresh_status()
 
     # ── running a turn ───────────────────────────────────────────────────────

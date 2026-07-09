@@ -58,6 +58,7 @@ from .core.events import (
     ApprovalEvent,
     CompactionEvent,
     Delta,
+    ElisionEvent,
     ErrorEvent,
     HandoffEvent,
     MessageEnd,
@@ -142,6 +143,7 @@ from .compaction import (
     CompactionOutcome,
     estimate_tokens,
 )
+from .elision import Elider, ElisionConfig, ElisionOutcome
 
 # ── retry ─────────────────────────────────────────────────────────────────────
 from .util.retry import DefaultRetryPolicy, HttpError, RetryPolicy
@@ -160,7 +162,12 @@ from .session import (
     NullSessionStore,
     SessionMeta,
     SessionStore,
+    fork_session,
+    load_meta,
+    load_transcript,
     open_session,
+    transcript_to_messages,
+    user_turn_offsets,
 )
 
 # ── builtin agents + presets ──────────────────────────────────────────────────
@@ -242,6 +249,7 @@ __all__ = [
     "ThinkingEvent",
     "HandoffEvent",
     "CompactionEvent",
+    "ElisionEvent",
     "ApprovalEvent",
     "AgentEnd",
     "SubagentActivity",
@@ -319,6 +327,9 @@ __all__ = [
     "CompactionOutcome",
     "estimate_tokens",
     "SUMMARY_SYSTEM",
+    "Elider",
+    "ElisionConfig",
+    "ElisionOutcome",
     # retry, paths, sessions
     "DefaultRetryPolicy",
     "HttpError",
@@ -336,6 +347,11 @@ __all__ = [
     "MemorySessionStore",
     "NullSessionStore",
     "open_session",
+    "fork_session",
+    "load_meta",
+    "load_transcript",
+    "transcript_to_messages",
+    "user_turn_offsets",
     # builtin agents + presets
     "explore_agent",
     "plan_agent",

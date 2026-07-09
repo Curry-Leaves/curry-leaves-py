@@ -40,6 +40,7 @@ from curry_leaves.core.events import (
     AgentEvent,
     ApprovalEvent,
     CompactionEvent,
+    ElisionEvent,
     ErrorEvent,
     HandoffEvent,
     MessageEnd,
@@ -125,6 +126,14 @@ def _to_record(e: AgentEvent) -> dict[str, Any] | None:
             "messages_after": event.messages_after,
             "tokens_before": event.tokens_before,
             "summary": event.summary,
+        }
+    if isinstance(event, ElisionEvent):
+        return {
+            **tag,
+            "kind": "elision",
+            "results_elided": event.results_elided,
+            "tokens_before": event.tokens_before,
+            "tokens_reclaimed": event.tokens_reclaimed,
         }
     if isinstance(event, ErrorEvent):
         return {**tag, "kind": "error", "message": event.message, "fatal": event.fatal}

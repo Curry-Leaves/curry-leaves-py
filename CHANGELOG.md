@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Session forking** — branch a new session off an existing conversation's
+  recorded transcript instead of starting from scratch or only ever
+  continuing linearly. `curry_leaves.session.fork_session(source_id, new_id,
+  meta, upto_turn=...)` replays a source session's transcript (optionally
+  truncated after the Nth user turn) into live `Message`s and opens a new,
+  independent session store seeded with that copied history — edits from the
+  fork point never touch the original session's transcript. `Runner` gained
+  `RunConfig.initial_messages` to seed conversation state from a fork (or any
+  other precomputed history). Wired up as `/fork [n]` in both the REPL and
+  TUI, alongside `/reset`.
+- **Tool-result elision** (opt-in) — reclaim context by stubbing out stale
+  tool results before lossy compaction is needed. A result is eligible once
+  it's stale (superseded by an identical later call, or untouched for
+  `age_turns` user turns) and big enough to matter; eligible results are
+  applied in batched, biggest-first sweeps (gated on occupancy and a minimum
+  savings floor) so the provider prompt cache isn't invalidated turn by turn.
+  Originals are preserved whole in the blob store — every stub carries a
+  preview and an `artifact://<id>` pointer the model can `read` back.
+  Deterministic, no model call. Enable via
+  `RunConfig(elision=ElisionConfig(enabled=True))`; emits an `ElisionEvent`
+  (recorded to session transcripts as `kind: "elision"`).
+
 ## [1.2.0] - 2026-07-09
 
 ### Added

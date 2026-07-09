@@ -117,6 +117,15 @@ class PermissionEngine:
         # Otherwise route to the host for a choice.
         req = ApproveTool(tool=tool, args=args, risk=risk, reason="", default="deny")
         choice = await ctx.host.request(req) if ctx.host is not None else "deny"
+        # A host is expected to answer with a scope string ("once"/"session"/"always"/
+        # "deny") — ev.approval's `scope` field is a strict pydantic Literal, so anything
+        # else (e.g. a bare bool from a host that forgot the contract) would otherwise
+        # raise INSIDE this coroutine. That exception propagates into Runner.stream's
+        # detached `pump_task`, which nothing awaits — so it silently kills the whole run
+        # with no visible error anywhere instead of surfacing as a loud bug. Fail toward a
+        # safe, valid scope instead of letting a malformed host response take down the run.
+        if choice not in ("once", "session", "always", "deny"):
+            choice = "once" if choice else "deny"
         if choice == "always":
             self._global_approvals.add(tool)
             if self._on_global_approve is not None:

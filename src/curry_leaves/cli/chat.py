@@ -18,16 +18,17 @@ import asyncio
 import os
 import sys
 from datetime import datetime
-from typing import Union
+from typing import Optional, Union
 
 from curry_leaves.agents import explore_agent, plan_agent
 from curry_leaves.core.agent import Agent
+from curry_leaves.core.messages import Message
 from curry_leaves.permission import PermissionEngine, PermissionOptions, contained_approval
 from curry_leaves.presets import coding_tools, web_tools
 from curry_leaves.prompt import CODING_IDENTITY
 from curry_leaves.providers.factory import provider_name_for_model
 from curry_leaves.runner import RunConfig, Runner
-from curry_leaves.session import SessionMeta, SessionStore, open_session
+from curry_leaves.session import SessionMeta, SessionStore, fork_session, open_session
 from curry_leaves.settings import add_global_approval, auto_hosts, global_approvals, resolve_default_model
 from curry_leaves.skills import SkillRegistry
 from curry_leaves.thinking import ThinkingConfig
@@ -117,7 +118,7 @@ class Chat:
         self.agent = _build_agent(model)
         self.runner = self._new_runner()
 
-    def _new_runner(self) -> Runner:
+    def _new_runner(self, initial_messages: Optional[list[Message]] = None) -> Runner:
         return Runner(
             self.agent,
             RunConfig(
@@ -127,6 +128,7 @@ class Chat:
                 host=self.host,
                 permission=self.permission,
                 autonomous=self.autonomous,
+                initial_messages=initial_messages,
             ),
         )
 
@@ -145,6 +147,34 @@ class Chat:
         self.agent = _build_agent(self.model)
         self.store.mark("reset")
         self.runner = self._new_runner()
+
+    async def fork(self, upto_turn: Optional[int] = None) -> str:
+        """Branch off a brand-new session that starts with this conversation's history (up
+        through the `upto_turn`-th user turn, or the whole thing if None), then keep going —
+        edits from here diverge into the fork without touching the original session's transcript.
+        Closes the current store (its transcript is now a completed prefix of the fork's own) and
+        returns the new session id.
+        """
+        provider = "?"
+        try:
+            provider = provider_name_for_model(self.model)
+        except Exception:
+            pass  # unknown model → leave as ?
+        new_id = _session_id()
+        new_store, messages = fork_session(
+            self.session,
+            new_id,
+            SessionMeta(model=self.model, provider=provider, cwd=os.getcwd()),
+            upto_turn=upto_turn,
+        )
+        old_store = self.store
+        old_runner = self.runner
+        self.session = new_id
+        self.store = new_store
+        self.runner = self._new_runner(initial_messages=messages)
+        await old_runner.close()
+        await old_store.close()
+        return new_id
 
     async def close(self) -> None:
         await self.runner.close()
@@ -170,6 +200,7 @@ def _banner(chat: Chat) -> None:
 HELP: list[tuple[str, str]] = [
     ("help", "show this help"),
     ("reset", "start a fresh conversation"),
+    ("fork", "branch a new session from this conversation (/fork [n] — up through the nth user turn)"),
     ("compact", "summarize history to free the context window (/compact [focus])"),
     ("auto", "toggle auto-approve of contained changes (within repo / known hosts)"),
     ("autonomous", "toggle autonomous mode (self-drive, ask only up front)"),
@@ -201,6 +232,18 @@ async def _dispatch(chat: Chat, text: str) -> Union[str, None, object]:
     if cmd == "reset":
         chat.reset()
         print(f"{DIM}(new conversation){RESET}\n")
+        return None
+    if cmd == "fork":
+        upto_turn: Optional[int] = None
+        if rest:
+            try:
+                upto_turn = int(rest)
+            except ValueError:
+                print(f"{DIM}usage: /fork [n] — n is the user turn to fork after (0-indexed){RESET}\n")
+                return None
+        old_id = chat.session
+        new_id = await chat.fork(upto_turn)
+        print(f"{DIM}(forked {old_id} → {new_id}, continuing here){RESET}\n")
         return None
     if cmd == "compact":
         sys.stdout.write(f"{DIM}compacting…{RESET}")

@@ -133,6 +133,20 @@ class CompactionEvent(BaseModel):
     summary: str
 
 
+class ElisionEvent(BaseModel):
+    """Stale tool results were stubbed out to reclaim context (an elision sweep).
+
+    Originals are preserved in the blob store behind ``artifact://`` stubs, so
+    nothing is lost — the counts let a UI or the session store surface how much
+    of the window was reclaimed.
+    """
+
+    type: Literal["elision"] = "elision"
+    results_elided: int
+    tokens_before: int
+    tokens_reclaimed: int
+
+
 class ApprovalEvent(BaseModel):
     """The permission engine resolved a tool call that required a user decision.
 
@@ -183,6 +197,7 @@ AgentEvent = Annotated[
         ThinkingEvent,
         HandoffEvent,
         CompactionEvent,
+        ElisionEvent,
         ApprovalEvent,
         AgentEnd,
         SubagentActivity,
@@ -253,6 +268,14 @@ class ev:
             messages_after=messages_after,
             tokens_before=tokens_before,
             summary=summary,
+        )
+
+    @staticmethod
+    def elision(results_elided: int, tokens_before: int, tokens_reclaimed: int) -> ElisionEvent:
+        return ElisionEvent(
+            results_elided=results_elided,
+            tokens_before=tokens_before,
+            tokens_reclaimed=tokens_reclaimed,
         )
 
     @staticmethod

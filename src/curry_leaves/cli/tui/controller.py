@@ -9,15 +9,17 @@ from __future__ import annotations
 import os
 import random
 from datetime import datetime
+from typing import Optional
 
 from curry_leaves.agents import explore_agent, plan_agent
 from curry_leaves.core.agent import Agent
+from curry_leaves.core.messages import Message
 from curry_leaves.permission import PermissionEngine, PermissionOptions, contained_approval
 from curry_leaves.presets import coding_tools, web_tools
 from curry_leaves.prompt import CODING_IDENTITY
 from curry_leaves.providers.factory import provider_name_for_model
 from curry_leaves.runner import RunConfig, Runner
-from curry_leaves.session import SessionMeta, SessionStore, open_session
+from curry_leaves.session import SessionMeta, SessionStore, fork_session, open_session
 from curry_leaves.settings import add_global_approval, auto_hosts, global_approvals
 from curry_leaves.skills import SkillRegistry
 from curry_leaves.thinking import ThinkingConfig
@@ -86,7 +88,7 @@ class Chat:
         self.agent = _build_agent(model)
         self.runner = self._new_runner()
 
-    def _new_runner(self) -> Runner:
+    def _new_runner(self, initial_messages: Optional[list[Message]] = None) -> Runner:
         """Build a runner wired to the session store, interactive host, and permission gate."""
         return Runner(
             self.agent,
@@ -97,6 +99,7 @@ class Chat:
                 host=self.host,
                 permission=self.permission,
                 autonomous=self.autonomous,
+                initial_messages=initial_messages,
             ),
         )
 
@@ -120,6 +123,29 @@ class Chat:
         # Fresh runner re-attaches the store to its new event host; mark the boundary in the transcript.
         self.store.mark("reset")
         self.runner = self._new_runner()
+
+    async def fork(self, upto_turn: Optional[int] = None) -> str:
+        """Branch off a brand-new session that starts with this conversation's history (up
+        through the `upto_turn`-th user turn, or the whole thing if None), then keep going —
+        edits from here diverge into the fork without touching the original session's transcript.
+        Closes the current store (its transcript is now a completed prefix of the fork's own) and
+        returns the new session id.
+        """
+        new_id = _session_id()
+        new_store, messages = fork_session(
+            self.session,
+            new_id,
+            SessionMeta(model=self.model, provider=self.provider, cwd=self.cwd),
+            upto_turn=upto_turn,
+        )
+        old_store = self.store
+        old_runner = self.runner
+        self.session = new_id
+        self.store = new_store
+        self.runner = self._new_runner(initial_messages=messages)
+        await old_runner.close()
+        await old_store.close()
+        return new_id
 
     async def close(self) -> None:
         """Tear down the runner and flush the session transcript."""

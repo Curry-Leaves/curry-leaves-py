@@ -41,6 +41,7 @@ from curry_leaves.core.messages import (
     user_text,
 )
 from curry_leaves.core.tools import Permission, ToolExecutor, ToolRegistry, make_executor
+from curry_leaves.elision import Elider, ElisionConfig
 from curry_leaves.permission import AuthorizeContext, PermissionEngine
 from curry_leaves.prompt import BuildPromptOptions, ContextFile, Environment, build_system_prompt, resolve_identity
 from curry_leaves.providers.base import Context, Model, StreamOpts, settings_to_opts
@@ -102,6 +103,10 @@ class RunConfig:
     # sessions don't overflow. Automatic (threshold-gated) by default; also available manually via
     # `compact()`. Omit for sensible defaults; pass `CompactionConfig(auto=False)` to disable.
     compaction: Optional[CompactionConfig] = None
+    # Tool-result elision — stub out stale tool output (originals kept in the blob store)
+    # when the window fills, so lossy compaction rarely fires. OFF by default; pass
+    # `ElisionConfig(enabled=True)` to opt in. See elision.py for the full policy.
+    elision: Optional[ElisionConfig] = None
     # Permission gate for tool calls. Omitted → NO gating (every tool runs — unchanged, headless-safe).
     # Provided → each call is authorized against the active agent's `permissions` + this engine's
     # approvals; `ask` verdicts prompt through the host. Caller-owned; shared with subagents.
@@ -110,6 +115,9 @@ class RunConfig:
     # questions if needed), then choose the best path and execute on its own without asking mid-run.
     # Purely a prompt layer; independent of the permission gate. Toggle live via set_autonomous.
     autonomous: Optional[bool] = None
+    # Seed conversation history (e.g. replayed from a forked session) instead of starting empty.
+    # The Runner copies this list; mutating the one passed in afterward has no effect.
+    initial_messages: Optional[list[Message]] = None
 
 
 @dataclass
@@ -142,6 +150,7 @@ class EventChannel:
     def __init__(self) -> None:
         self._queue: asyncio.Queue[Any] = asyncio.Queue()
         self._closed = False
+        self._error: BaseException | None = None
         _sentinel: object = object()
         self._sentinel = _sentinel
 
@@ -156,10 +165,22 @@ class EventChannel:
         self._closed = True
         self._queue.put_nowait(self._sentinel)
 
+    def error(self, exc: BaseException) -> None:
+        """Like close(), but the exception is re-raised out of __aiter__ once the queue
+        drains — so a producer's failure surfaces to the consumer instead of silently
+        looking like the run finished. Without this, an exception inside pump() (see
+        Runner.stream) only reaches the orphaned, never-awaited pump_task and vanishes."""
+        if self._closed:
+            return
+        self._error = exc
+        self.close()
+
     async def __aiter__(self) -> AsyncIterator[AgentEvent]:
         while True:
             item = await self._queue.get()
             if item is self._sentinel:
+                if self._error is not None:
+                    raise self._error
                 return
             yield item
 
@@ -206,10 +227,12 @@ class Runner:
         internal = internal if internal is not None else _InternalOpts()
 
         self.usage = empty_usage()
-        self.messages = []
+        self.messages = list(config.initial_messages) if config.initial_messages is not None else []
 
-        self._steering: list[Message] = []
-        self._follow_ups: list[Message] = []
+        # (caller-given id, message) — the id lets a caller cancel_pending() an item
+        # before it's folded into the loop; None if the caller doesn't need that.
+        self._steering: list[tuple[Optional[str], Message]] = []
+        self._follow_ups: list[tuple[Optional[str], Message]] = []
         self._interrupt = Interrupt()
         self._running = False
 
@@ -231,6 +254,7 @@ class Runner:
         self._blobs: BlobStore = config.blobs if config.blobs is not None else BlobStore()
         self._session_store: Optional[SessionStore] = config.store
         self._compactor = Compactor(config.compaction)
+        self._elider = Elider(config.elision)
         self._permission: Optional[PermissionEngine] = config.permission
         self._autonomous: bool = config.autonomous if config.autonomous is not None else False
         # Approx tokens the conversation currently occupies, from the last turn's usage. Drives
@@ -320,23 +344,35 @@ class Runner:
         """Toggle autonomous mode live (affects the next turn's system prompt)."""
         self._autonomous = on
 
-    def steer(self, text: str) -> None:
-        """Inject a message mid-run (folded in before the next model turn)."""
-        self._steering.append(user_text(text, origin="steering"))
+    def steer(self, text: str, id: Optional[str] = None) -> None:
+        """Inject a message mid-run (folded in before the next model turn). `id`, if
+        given, lets a caller cancel_pending(id) it before that happens."""
+        self._steering.append((id, user_text(text, origin="steering")))
         if self._running:
             self._interrupt.set()
 
-    def follow_up(self, text: str) -> None:
-        """Queue a message to run after the current turn settles."""
-        self._follow_ups.append(user_text(text, origin="follow_up"))
+    def follow_up(self, text: str, id: Optional[str] = None) -> None:
+        """Queue a message to run after the current turn settles. `id`, if given, lets
+        a caller cancel_pending(id) it before that happens."""
+        self._follow_ups.append((id, user_text(text, origin="follow_up")))
+
+    def cancel_pending(self, id: str) -> bool:
+        """Remove a not-yet-folded-in steer()/follow_up() item by its `id`. Returns False
+        if it was never queued, already folded into the loop, or given no id."""
+        for lst in (self._steering, self._follow_ups):
+            for i, (item_id, _msg) in enumerate(lst):
+                if item_id == id:
+                    del lst[i]
+                    return True
+        return False
 
     def _drain_steering(self) -> list[Message]:
-        out = self._steering
+        out = [msg for _id, msg in self._steering]
         self._steering = []
         return out
 
     def _drain_follow_ups(self) -> list[Message]:
-        out = self._follow_ups
+        out = [msg for _id, msg in self._follow_ups]
         self._follow_ups = []
         return out
 
@@ -461,7 +497,17 @@ class Runner:
 
     async def stream(self, text: str) -> AsyncIterator[AgentEvent]:
         """Stream the events of one run (appends `text` as a user turn first)."""
-        # Compact the prior history first if it's near the window, so the new turn fits.
+        # Elide stale tool results first — cheap and lossless, and it may reclaim enough
+        # that compaction (the lossy step below) never fires.
+        elided = self._elider.maybe_sweep(
+            self.messages, self._blobs, self._context_tokens, self.model.context_window
+        )
+        if elided is not None:
+            self._context_tokens = max(0, self._context_tokens - elided.tokens_reclaimed)
+            eev = ev.elision(elided.results_elided, elided.tokens_before, elided.tokens_reclaimed)
+            self._emit(eev)
+            yield eev
+        # Compact the prior history if it's still near the window, so the new turn fits.
         if self._compactor.should_auto(len(self.messages), self._context_tokens, self.model.context_window):
             cev = await self._compact_once("auto")
             if cev is not None:
@@ -503,6 +549,13 @@ class Runner:
             try:
                 async for e in self._run_events(self._loop_with_handoff(ctx, opts)):
                     channel.push(e)
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                # Surface it to stream()'s consumer via the channel (see EventChannel.error)
+                # instead of letting it vanish into this Task, which nothing awaits.
+                channel.error(exc)
+                return
             finally:
                 off()
                 channel.close()

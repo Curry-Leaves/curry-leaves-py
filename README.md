@@ -80,8 +80,14 @@ print(result.output_text)
 - **Permissions.** An opt-in gate authorizes each tool call (`allow` / `ask` / `deny`), with standing
   approvals and contained-change auto-approval. Off by default — headless runs never hang.
 - **Sessions.** Each run can be recorded to `<home>/sessions/<id>/` (`meta.json` + `transcript.jsonl`).
+  Branch a new session off an existing one with `fork_session()` (or `/fork [n]` in the CLIs) —
+  it replays the recorded transcript into a fresh, independent session that diverges from there.
 - **Compaction.** Long conversations are summarized as they near the context window — automatic, or
   on demand via `Runner.compact()` / the `/compact` command.
+- **Elision** (opt-in). Before compaction ever fires, stale tool results (superseded reads, output
+  untouched for N turns) are swapped for short stubs — originals preserved in the blob store, one
+  `read artifact://<id>` away. Lossless, deterministic (no model call), and batched into sweeps so
+  it never thrashes the provider's prompt cache. `RunConfig(elision=ElisionConfig(enabled=True))`.
 - **Typed, async, dependency-light.** Python 3.11+, `mypy --strict`, ships `py.typed`. The library
   core rides on `pydantic` + `httpx`; the CLIs add [Textual](https://textual.textualize.io) + Rich,
   and MCP support uses the official `mcp` SDK.
@@ -181,7 +187,8 @@ The Runner composes an Agent with conversation state and drives the loop …
 ╰──────────────────────────────────────────────────────────╯
 ```
 
-**Slash commands:** `/help`, `/reset`, `/tools`, `/skills`, `/model`, `/stats`, `/clear`,
+**Slash commands:** `/help`, `/reset`, `/fork [n]` (branch a new session from this conversation,
+optionally up through the nth user turn), `/tools`, `/skills`, `/model`, `/stats`, `/clear`,
 `/compact [focus]`, `/auto` (toggle contained-change auto-approve), `/autonomous` (toggle self-drive
 mode), `/exit`. The TUI needs an interactive terminal (a TTY).
 
@@ -283,6 +290,7 @@ engine** — with all I/O pushed to swappable seams (Provider, Host, Tool).
 | **Thinking** | `thinking.py` | A tiny classifier that sizes reasoning effort per task. |
 | **Skills** | `skills.py` | Progressive-disclosure capability packages via `skill://` refs. |
 | **Compaction** | `compaction.py` | Summarizes old history as the context window fills. |
+| **Elision** | `elision.py` | Stubs out stale tool results (recoverably) before compaction is needed. |
 
 The one decision that drives the whole loop:
 
@@ -300,13 +308,13 @@ src/curry_leaves/
   providers/   # anthropic, openai/ollama, factory, sse, base
   tools/       # read, write, edit, find, search, bash, tasks, ask, web, …
   mcp/         # MCP client: servers, manager, config, tool adapter
-  session/     # session store + recording
+  session/     # session store + recording + forking (replay a transcript into a new branch)
   cli/         # chat REPL + Textual TUI
   util/        # paths, retry, frontmatter, resources
-  runner.py prompt.py permission.py thinking.py skills.py compaction.py catalog.py settings.py
+  runner.py prompt.py permission.py thinking.py skills.py compaction.py elision.py catalog.py settings.py
   __init__.py  # public API surface
 examples/      # runnable examples
-tests/         # pytest suite (MCP subsystem)
+tests/         # pytest suite (MCP subsystem, session forking, elision)
 ```
 
 ## Development
