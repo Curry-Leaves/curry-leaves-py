@@ -138,6 +138,10 @@ StopReason = Literal["tool_use", "stop", "length", "error", "aborted"]
 class UserMessage(BaseModel):
     role: Literal["user"] = "user"
     content: list[Content] = Field(default_factory=list)
+    # How this message entered the conversation. None for the normal prompt path;
+    # "steering"/"follow_up" when injected via Runner.steer()/follow_up() so
+    # consumers (UI, telemetry) can tell them apart from the event stream alone.
+    origin: Literal["steering", "follow_up"] | None = None
 
 
 class AssistantMessage(BaseModel):
@@ -167,8 +171,8 @@ Message = Annotated[
 # ── Tiny ergonomic constructors — keep call sites readable. ──────────────────
 
 
-def user_text(text: str) -> UserMessage:
-    return UserMessage(content=[TextBlock(text=text)])
+def user_text(text: str, *, origin: Literal["steering", "follow_up"] | None = None) -> UserMessage:
+    return UserMessage(content=[TextBlock(text=text)], origin=origin)
 
 
 def user_image(

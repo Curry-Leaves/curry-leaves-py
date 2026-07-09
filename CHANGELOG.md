@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-07-09
+
+### Added
+
+- `UserMessage.origin` — tags a message as `"steering"` or `"follow_up"` when
+  injected via `Runner.steer()` / `Runner.follow_up()`, `None` for a normal
+  prompt. Lets consumers of the event stream tell barge-in interrupts apart
+  from queued follow-ups without tracking `Runner`'s internal queues.
+- `TaskStore` can now persist to disk: pass `path` to `TaskStore(path=...)` or
+  `task_tools(store=...)` to keep the task list across runs (e.g. one file per
+  chat session). Every mutation rewrites the file; a fully-completed list is
+  reset on load so a new request starts from an empty checklist.
+
 ## [1.0.0] - 2026-07-08
 
 ### Added

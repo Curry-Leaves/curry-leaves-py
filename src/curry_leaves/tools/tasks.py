@@ -12,6 +12,8 @@ the lifetime of that bundle (i.e. one agent run) — build a fresh bundle per ru
 from __future__ import annotations
 
 import asyncio
+import json
+from pathlib import Path
 from typing import Any, Literal, Optional
 
 import pydantic
@@ -33,14 +35,39 @@ class Task(pydantic.BaseModel):
 
 
 class TaskStore:
-    def __init__(self) -> None:
+    """In-memory by default. Pass `path` to persist across runs (e.g. one file per chat
+    session) — every mutation rewrites it, and it's loaded back in on construction.
+
+    `reset_if_done`: a fully-completed list on load is treated as belonging to the PRIOR
+    request, not the new one — it's cleared so a fresh plan starts empty rather than
+    carrying a finished checklist into unrelated work.
+    """
+
+    def __init__(self, path: Optional[Path] = None, reset_if_done: bool = True) -> None:
         self._seq = 0
         self.tasks: list[Task] = []
+        self._path = path
+        if path is not None and path.exists():
+            data = json.loads(path.read_text())
+            self.tasks = [Task(**t) for t in data.get("tasks", [])]
+            self._seq = data.get("seq", len(self.tasks))
+            if reset_if_done and self.tasks and all(t.status == "completed" for t in self.tasks):
+                self.tasks = []
+                self._save()
+
+    def _save(self) -> None:
+        if self._path is None:
+            return
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = self._path.with_suffix(".tmp")
+        tmp.write_text(json.dumps({"seq": self._seq, "tasks": [t.model_dump() for t in self.tasks]}))
+        tmp.replace(self._path)
 
     def create(self, subject: str, active_form: Optional[str] = None) -> Task:
         self._seq += 1
         task = Task(id=str(self._seq), subject=subject, active_form=active_form, status="pending")
         self.tasks.append(task)
+        self._save()
         return task
 
     def get(self, id: str) -> Optional[Task]:
@@ -49,10 +76,21 @@ class TaskStore:
                 return t
         return None
 
+    def update(self, id: str, **patch: Any) -> Optional[Task]:
+        task = self.get(id)
+        if task is None:
+            return None
+        for k, v in patch.items():
+            if v is not None:
+                setattr(task, k, v)
+        self._save()
+        return task
+
     def remove(self, id: str) -> bool:
         for i, t in enumerate(self.tasks):
             if t.id == id:
                 del self.tasks[i]
+                self._save()
                 return True
         return False
 
@@ -145,16 +183,14 @@ class TaskUpdateTool:
                 return ToolResult(content=f"No task with id #{args.task_id}.", is_error=True)
             return ToolResult(content=f"Deleted task #{args.task_id}.\n{self._store.render()}")
 
-        task = self._store.get(args.task_id)
+        task = self._store.update(
+            args.task_id,
+            status=args.status,
+            subject=args.subject,
+            active_form=args.active_form,
+        )
         if task is None:
             return ToolResult(content=f"No task with id #{args.task_id}.", is_error=True)
-
-        if args.status is not None:
-            task.status = args.status
-        if args.subject is not None:
-            task.subject = args.subject
-        if args.active_form is not None:
-            task.active_form = args.active_form
 
         in_progress = sum(1 for t in self._store.tasks if t.status == "in_progress")
         warn = (
@@ -232,10 +268,10 @@ def task_get(store: TaskStore) -> Tool[Any]:
     return TaskGetTool(store)
 
 
-def task_tools() -> list[Tool[Any]]:
+def task_tools(store: Optional[TaskStore] = None) -> list[Tool[Any]]:
     """The task-tracking toolset: `task_create`, `task_update`, `task_list`, `task_get`
-    sharing one in-memory store. Build a fresh bundle per agent run so state doesn't
-    leak across runs.
+    sharing one store. Pass a `TaskStore` (e.g. one backed by a per-session file) to
+    reuse/persist state; omit it for a fresh in-memory store scoped to this call.
     """
-    store = TaskStore()
+    store = store or TaskStore()
     return [task_create(store), task_update(store), task_list(store), task_get(store)]

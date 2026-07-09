@@ -322,13 +322,13 @@ class Runner:
 
     def steer(self, text: str) -> None:
         """Inject a message mid-run (folded in before the next model turn)."""
-        self._steering.append(user_text(text))
+        self._steering.append(user_text(text, origin="steering"))
         if self._running:
             self._interrupt.set()
 
     def follow_up(self, text: str) -> None:
         """Queue a message to run after the current turn settles."""
-        self._follow_ups.append(user_text(text))
+        self._follow_ups.append(user_text(text, origin="follow_up"))
 
     def _drain_steering(self) -> list[Message]:
         out = self._steering
