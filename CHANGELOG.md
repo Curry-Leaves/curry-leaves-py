@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2026-07-09
+
+### Added
+
+- **Deferred-tool teasers in the system prompt** — when `search_tools` is
+  advertised, the prompt now lists the names and one-line descriptions of
+  tools that exist but aren't callable yet, and tells the model it must call
+  `search_tools` to activate one before calling it. Previously an
+  unadvertised tool referenced by name (e.g. in a skill or instruction) had
+  no listing to match against; the provider's schema constraint would
+  silently collapse the call onto the nearest advertised tool name instead,
+  causing confused retries. `ToolRegistry.deferred_teasers()` builds the
+  list; `Runner` passes it through `BuildPromptOptions.deferred_tools`.
+
 ## [1.3.1] - 2026-07-09
 
 ### Added

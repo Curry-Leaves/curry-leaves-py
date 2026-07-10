@@ -425,6 +425,7 @@ class Runner:
             BuildPromptOptions(
                 identity=self._identity,
                 tools={s.name for s in advertised},
+                deferred_tools=self._exec_registry.deferred_teasers(self._active_tools),
                 context_files=self._context_files,
                 skills=self._skills.teasers(),
                 subagents=(

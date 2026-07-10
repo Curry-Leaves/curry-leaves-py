@@ -192,6 +192,25 @@ class ToolRegistry:
                     out.append(s)
         return out
 
+    def deferred_teasers(self, active: Iterable[str] = ()) -> list[tuple[str, str]]:
+        """(name, first sentence of description) for deferred tools NOT yet activated —
+        the prompt lists these so the model knows what `search_tools` can unlock. Without
+        the listing, a prompt that references a deferred tool by name sends the model
+        calling it directly; the provider's schema constraint then collapses the call
+        onto the nearest advertised name (e.g. list_artifacts -> list_todos) and the
+        model loops, baffled."""
+        active_set = set(active)
+        out: list[tuple[str, str]] = []
+        for name in sorted(self._deferred):
+            if name in active_set:
+                continue
+            desc = (self._tools[name].description or "").strip()
+            first = desc.split(". ")[0].strip().rstrip(".")
+            if len(first) > 120:
+                first = first[:120].rsplit(" ", 1)[0] + "…"
+            out.append((name, first))
+        return out
+
     def search(self, query: str, limit: int = 5) -> list[Tool[Any]]:
         """Keyword-rank the DEFERRED tools for `search_tools`. Whole-WORD matching (set
         intersection), not substring; drops tokens < 3 chars; ties break by name.

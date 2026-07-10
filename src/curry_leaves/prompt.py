@@ -67,6 +67,7 @@ class Environment(BaseModel):
 class BuildPromptOptions(BaseModel):
     identity: str | None = None
     tools: set[str] = Field(default_factory=set)
+    deferred_tools: list[tuple[str, str]] = Field(default_factory=list)
     context_files: list[ContextFile] = Field(default_factory=list)
     subagents: list[tuple[str, str]] = Field(default_factory=list)
     skills: list[tuple[str, str]] = Field(default_factory=list)
@@ -115,7 +116,7 @@ def _skills_layer(skills: list[tuple[str, str]]) -> str:
     return "\n".join(lines)
 
 
-def _tools_layer(tools: set[str]) -> str:
+def _tools_layer(tools: set[str], deferred: list[tuple[str, str]] | None = None) -> str:
     lines = ["# Tools", "Use a tool whenever it improves correctness or grounding."]
     if "read" in tools:
         lines.append("- Read files with `read` (it returns numbered lines), not `cat`.")
@@ -128,6 +129,19 @@ def _tools_layer(tools: set[str]) -> str:
             "- Need a capability you don't see listed? Call `search_tools` to discover more tools, then call them."
         )
     lines.append("- You MUST complete the task using the tools available; don't stop at a plausible guess.")
+    if deferred and "search_tools" in tools:
+        lines.append("")
+        lines.append(
+            "These tools also exist but are NOT callable yet. To use one, FIRST call `search_tools`"
+        )
+        lines.append(
+            "with keywords matching it — that activates it (callable from the next turn on). Do NOT"
+        )
+        lines.append(
+            "call it before activating, and NEVER call a different tool as a stand-in for it:"
+        )
+        for name, desc in deferred:
+            lines.append(f"- `{name}` — {desc}")
     return "\n".join(lines)
 
 
@@ -168,7 +182,7 @@ def build_system_prompt(instructions: str = "", opts: BuildPromptOptions | None 
     if opts.skills:
         layers.append(_skills_layer(opts.skills))  # 4b. skill teasers
     if tools:
-        layers.append(_tools_layer(tools))  # 5. tools (volatile)
+        layers.append(_tools_layer(tools, opts.deferred_tools))  # 5. tools (volatile)
     if "task_create" in tools:
         layers.append(TODO_GUIDANCE)  # 5b. task tracking
     if opts.output_schema:
