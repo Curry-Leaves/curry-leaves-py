@@ -66,7 +66,19 @@ for path, pattern in [
         sys.exit(f"error: {needle!r} not found in {path}")
     open(path, "w").write(text.replace(needle, repl, 1))
 EOF
-  git add pyproject.toml src/curry_leaves/__init__.py
+  echo "==> Stamping CHANGELOG.md"
+  "$PY" - "$NEW_VERSION" <<'EOF'
+import re, sys
+from datetime import date
+new = sys.argv[1]
+text = open("CHANGELOG.md").read()
+if "## [Unreleased]" not in text:
+    sys.exit("error: no '## [Unreleased]' section in CHANGELOG.md to stamp")
+text = text.replace("## [Unreleased]", f"## [{new}] - {date.today().isoformat()}", 1)
+open("CHANGELOG.md", "w").write(text)
+EOF
+
+  git add pyproject.toml src/curry_leaves/__init__.py CHANGELOG.md
   git commit -m "chore: release v$NEW_VERSION"
   git tag "v$NEW_VERSION"
 fi
