@@ -19,7 +19,10 @@ import httpx
 from curry_leaves.core.events import Delta
 from curry_leaves.core.messages import (
     AssistantMessage,
+    AudioBlock,
     Content,
+    FileBlock,
+    ImageBlock,
     StopReason,
     TextBlock,
     ThinkingBlock,
@@ -68,6 +71,42 @@ def _assistant_to_wire(content: list[Content]) -> dict[str, Any]:
     return msg
 
 
+def _user_to_wire(content: list[Content]) -> str | list[dict[str, Any]]:
+    """User content on the wire: a plain string for text-only turns (the common case,
+    and what every OpenAI-compatible gateway understands), a parts array only when a
+    multimodal block is present.
+    """
+    if all(isinstance(b, TextBlock) for b in content):
+        return text_of(content)
+    parts: list[dict[str, Any]] = []
+    for b in content:
+        if isinstance(b, TextBlock):
+            parts.append({"type": "text", "text": b.text})
+        elif isinstance(b, ImageBlock):
+            url = b.source if b.kind == "url" else f"data:{b.media_type};base64,{b.source}"
+            parts.append({"type": "image_url", "image_url": {"url": url}})
+        elif isinstance(b, AudioBlock):
+            parts.append({"type": "input_audio", "input_audio": {"data": b.source, "format": b.format}})
+        elif isinstance(b, FileBlock):
+            if b.kind == "url":
+                # Chat Completions has no URL file input — reject loudly rather than drop.
+                raise ValueError(
+                    "the OpenAI Chat Completions API does not accept file URLs; "
+                    "pass the file as base64 (kind='base64') instead"
+                )
+            parts.append(
+                {
+                    "type": "file",
+                    "file": {
+                        "filename": b.filename or "attachment",
+                        "file_data": f"data:{b.media_type};base64,{b.source}",
+                    },
+                }
+            )
+        # thinking/tool_call blocks never appear in user content; nothing else to map.
+    return parts
+
+
 def build_openai_request(ctx: Context, model: Model, opts: StreamOpts) -> dict[str, Any]:
     wire: list[dict[str, Any]] = []
     if ctx.system_prompt:
@@ -75,7 +114,7 @@ def build_openai_request(ctx: Context, model: Model, opts: StreamOpts) -> dict[s
 
     for msg in ctx.messages:
         if msg.role == "user":
-            wire.append({"role": "user", "content": text_of(msg.content)})
+            wire.append({"role": "user", "content": _user_to_wire(msg.content)})
         elif msg.role == "assistant":
             wire.append(_assistant_to_wire(msg.content))
         else:

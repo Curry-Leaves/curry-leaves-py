@@ -17,7 +17,9 @@ import httpx
 from curry_leaves.core.events import Delta
 from curry_leaves.core.messages import (
     AssistantMessage,
+    AudioBlock,
     Content,
+    FileBlock,
     ImageBlock,
     StopReason,
     TextBlock,
@@ -77,6 +79,24 @@ def _content_to_wire(block: Content) -> dict[str, Any]:
                 "data": block.source,
             },
         }
+    if isinstance(block, FileBlock):
+        if block.kind == "url":
+            return {"type": "document", "source": {"type": "url", "url": block.source}}
+        return {
+            "type": "document",
+            "source": {
+                "type": "base64",
+                "media_type": block.media_type,
+                "data": block.source,
+            },
+        }
+    if isinstance(block, AudioBlock):
+        # Reject loudly rather than dropping: a silently vanished attachment is far
+        # harder to debug than an explicit error naming the unsupported combination.
+        raise ValueError(
+            "the Anthropic API does not accept audio input; "
+            "use an audio-capable OpenAI model or remove the AudioBlock"
+        )
     raise AssertionError(f"unreachable content block: {block!r}")
 
 

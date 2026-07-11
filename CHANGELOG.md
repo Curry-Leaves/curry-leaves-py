@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Multimodal user input** — user messages can now carry audio and documents
+  alongside images. Two new content blocks (`AudioBlock`, `FileBlock`) join the
+  neutral `Content` union, with `user_audio()` / `user_file()` constructors
+  mirroring `user_image()`. Provider translation happens only at the wire edge:
+  the OpenAI provider emits a parts array for multimodal turns (plain string
+  for text-only turns, unchanged) mapping images, audio (`input_audio`), and
+  files (`file`); the Anthropic provider maps `FileBlock` to a `document`
+  block. Unsupported combinations are rejected loudly at request-build time
+  rather than silently dropped — Anthropic has no audio input, and OpenAI Chat
+  Completions has no file-URL input. Multimodal turns are recorded to the
+  session transcript with their full block content (text-only turns keep the
+  compact `text` record) so a fork replays them faithfully.
+
 ## [1.4.0] - 2026-07-09
 
 ### Added

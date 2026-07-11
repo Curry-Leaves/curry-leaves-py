@@ -36,6 +36,7 @@ from typing import Any, Callable, Protocol, TextIO
 
 from pydantic import BaseModel
 
+from curry_leaves.core.messages import Content, TextBlock
 from curry_leaves.core.events import (
     AgentEvent,
     ApprovalEvent,
@@ -190,9 +191,16 @@ class SessionStore(ABC):
     def _write(self, record: dict[str, Any]) -> None:
         self.persist_record({"ts": _now_iso(), **record})
 
-    def user(self, text: str) -> None:
-        """Record a user turn (the event stream carries no user event, so frontends call this)."""
-        self._write({"kind": "user", "text": text})
+    def user(self, text: str, *, content: list[Content] | None = None) -> None:
+        """Record a user turn (the event stream carries no user event, so frontends call this).
+
+        Pass `content` when the turn carries more than text (images/audio/files) so a
+        fork can replay it faithfully; text-only turns keep the compact `text` record.
+        """
+        record: dict[str, Any] = {"kind": "user", "text": text}
+        if content is not None and any(not isinstance(b, TextBlock) for b in content):
+            record["content"] = [b.model_dump() for b in content]
+        self._write(record)
 
     def mark(self, kind: str, fields: dict[str, Any] | None = None) -> None:
         """Record a free-form control marker (e.g. a conversation reset)."""

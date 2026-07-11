@@ -74,8 +74,36 @@ class ImageBlock(BaseModel):
     kind: Literal["base64", "url"] = "base64"
 
 
+class AudioBlock(BaseModel):
+    """Audio in a user message — multimodal input.
+
+    ``source`` is base64-encoded bytes. Provider support is narrow: OpenAI
+    audio-capable models accept it; Anthropic has no audio input, so its
+    provider rejects this block at request-build time rather than dropping it.
+    """
+
+    type: Literal["audio"] = "audio"
+    source: str  # base64 payload
+    format: Literal["wav", "mp3"] = "wav"
+
+
+class FileBlock(BaseModel):
+    """A document (typically a PDF) in a user message — multimodal input.
+
+    Mirrors ImageBlock: ``source`` is base64-encoded bytes or a URL. Anthropic
+    accepts both kinds; OpenAI's Chat Completions API only accepts inline data,
+    so its provider rejects ``kind="url"`` at request-build time.
+    """
+
+    type: Literal["file"] = "file"
+    source: str  # base64 payload OR a URL
+    media_type: str = "application/pdf"
+    kind: Literal["base64", "url"] = "base64"
+    filename: str | None = None  # some wire formats (OpenAI) want one
+
+
 Content = Annotated[
-    Union[TextBlock, ThinkingBlock, ToolCallBlock, ImageBlock],
+    Union[TextBlock, ThinkingBlock, ToolCallBlock, ImageBlock, AudioBlock, FileBlock],
     Field(discriminator="type"),
 ]
 
@@ -186,6 +214,34 @@ def user_image(
     if text:
         blocks.append(TextBlock(text=text))
     blocks.append(ImageBlock(source=source, kind=kind, media_type=media_type))
+    return UserMessage(content=blocks)
+
+
+def user_audio(
+    source: str,
+    *,
+    format: Literal["wav", "mp3"] = "wav",
+    text: str = "",
+) -> UserMessage:
+    blocks: list[Content] = []
+    if text:
+        blocks.append(TextBlock(text=text))
+    blocks.append(AudioBlock(source=source, format=format))
+    return UserMessage(content=blocks)
+
+
+def user_file(
+    source: str,
+    *,
+    kind: Literal["base64", "url"] = "base64",
+    media_type: str = "application/pdf",
+    filename: str | None = None,
+    text: str = "",
+) -> UserMessage:
+    blocks: list[Content] = []
+    if text:
+        blocks.append(TextBlock(text=text))
+    blocks.append(FileBlock(source=source, kind=kind, media_type=media_type, filename=filename))
     return UserMessage(content=blocks)
 
 

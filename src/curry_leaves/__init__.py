@@ -29,8 +29,10 @@ from .core.tools import (
 
 # ── the neutral message model + events ───────────────────────────────────────
 from .core.messages import (
+    AudioBlock,
     Content,
     Cost,
+    FileBlock,
     ImageBlock,
     Message,
     StopReason,
@@ -49,6 +51,8 @@ from .core.messages import (
     empty_usage,
     text_of,
     tool_result_text,
+    user_audio,
+    user_file,
     user_image,
     user_text,
 )
@@ -217,6 +221,8 @@ __all__ = [
     "ThinkingBlock",
     "ToolCallBlock",
     "ImageBlock",
+    "AudioBlock",
+    "FileBlock",
     "Content",
     "Cost",
     "empty_cost",
@@ -231,6 +237,8 @@ __all__ = [
     "StopReason",
     "user_text",
     "user_image",
+    "user_audio",
+    "user_file",
     "assistant_text",
     "empty_assistant",
     "tool_result_text",

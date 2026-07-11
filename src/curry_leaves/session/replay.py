@@ -83,7 +83,10 @@ def transcript_to_messages(records: list[dict[str, Any]]) -> list[Message]:
             continue
         kind = r.get("kind")
         if kind == "user":
-            messages.append(UserMessage(content=[TextBlock(text=r.get("text", ""))]))
+            if "content" in r:  # multimodal turn — recorded blocks replay verbatim
+                messages.append(UserMessage.model_validate({"content": r["content"]}))
+            else:
+                messages.append(UserMessage(content=[TextBlock(text=r.get("text", ""))]))
         elif kind == "assistant":
             messages.append(
                 AssistantMessage.model_validate(

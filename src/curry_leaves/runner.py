@@ -35,6 +35,7 @@ from curry_leaves.core.messages import (
     Message,
     StopReason,
     Usage,
+    UserMessage,
     add_usage,
     empty_usage,
     text_of,
@@ -496,8 +497,14 @@ class Runner:
 
     # ── entry points ───────────────────────────────────────────────────────────
 
-    async def stream(self, text: str) -> AsyncIterator[AgentEvent]:
-        """Stream the events of one run (appends `text` as a user turn first)."""
+    async def stream(self, text: str | UserMessage) -> AsyncIterator[AgentEvent]:
+        """Stream the events of one run (appends `text` as a user turn first).
+
+        Accepts either plain text or a full UserMessage — pass the latter for
+        multimodal turns (images/audio/files via `user_image`/`user_audio`/`user_file`).
+        """
+        message = user_text(text) if isinstance(text, str) else text
+        prompt_text = text_of(message.content)
         # Elide stale tool results first — cheap and lossless, and it may reclaim enough
         # that compaction (the lossy step below) never fires.
         elided = self._elider.maybe_sweep(
@@ -513,9 +520,11 @@ class Runner:
             cev = await self._compact_once("auto")
             if cev is not None:
                 yield cev
-        self.messages.append(user_text(text))
+        self.messages.append(message)
         if self._session_store is not None:
-            self._session_store.user(text)  # the event stream carries no user event; record it here
+            # The event stream carries no user event; record it here (blocks included,
+            # so a fork replays multimodal turns faithfully).
+            self._session_store.user(prompt_text, content=message.content)
         self._interrupt.clear()
 
         opts: StreamOpts = settings_to_opts(self.agent.model_settings)
@@ -523,7 +532,7 @@ class Runner:
         if self.agent.output_type is not None and len(self.agent.tools.tools()) == 0:
             opts.response_format = {"type": "json_object"}
         if self._auto_thinking is not None:
-            effort = await self._auto_thinking.classify(text)
+            effort = await self._auto_thinking.classify(prompt_text)
             if effort != Effort.MINIMAL:
                 opts.reasoning_effort = effort.value
                 opts.thinking_budget = thinking_budget(effort)
@@ -589,8 +598,9 @@ class Runner:
         finally:
             self._running = False
 
-    async def run(self, text: str) -> RunResult:
-        """Run to completion and return a RunResult."""
+    async def run(self, text: str | UserMessage) -> RunResult:
+        """Run to completion and return a RunResult. Accepts plain text or a full
+        UserMessage (for multimodal turns)."""
         outputresult = await self._drive(text)
         output_text, stop_reason, events = (
             outputresult.output_text,
@@ -617,7 +627,7 @@ class Runner:
         stop_reason: Optional[StopReason]
         events: list[AgentEvent]
 
-    async def _drive(self, text: str) -> "Runner._DriveResult":
+    async def _drive(self, text: str | UserMessage) -> "Runner._DriveResult":
         events: list[AgentEvent] = []
         output_text = ""
         stop_reason: Optional[StopReason] = None
