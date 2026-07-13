@@ -110,7 +110,7 @@ class TaskStore:
 # ── task_create ──────────────────────────────────────────────────────────────
 
 
-class CreateArgs(pydantic.BaseModel):
+class TaskSpec(pydantic.BaseModel):
     subject: str = pydantic.Field(
         description="The task, imperative form (e.g. 'Add the search tool')."
     )
@@ -120,12 +120,23 @@ class CreateArgs(pydantic.BaseModel):
     )
 
 
+class CreateArgs(pydantic.BaseModel):
+    tasks: list[TaskSpec] = pydantic.Field(
+        min_length=1,
+        description=(
+            "The tasks to add, in order. Pass the WHOLE plan in one call — one entry per "
+            "step. A single-item list is fine for one-off additions."
+        ),
+    )
+
+
 class TaskCreateTool:
     name = "task_create"
     risk: Optional[Risk] = "read"
     description = (
-        "Add ONE task to your task list and get back its id. Call once per step when planning "
-        "multi-step work. Returns the new task's id plus the full current list."
+        "Add one or more tasks to your task list in a single call. When planning multi-step "
+        "work, pass the entire plan as the `tasks` array at once rather than calling this "
+        "repeatedly. Returns the new task ids plus the full current list."
     )
     schema: type[pydantic.BaseModel] = CreateArgs
     timeout: Optional[float] = None
@@ -134,8 +145,10 @@ class TaskCreateTool:
         self._store = store
 
     async def run(self, args: CreateArgs, ctx: Context, signal: asyncio.Event) -> ToolResult:
-        task = self._store.create(args.subject, args.active_form)
-        return ToolResult(content=f"Created task #{task.id}.\n{self._store.render()}")
+        created = [self._store.create(spec.subject, spec.active_form) for spec in args.tasks]
+        ids = ", ".join(f"#{t.id}" for t in created)
+        label = "task" if len(created) == 1 else "tasks"
+        return ToolResult(content=f"Created {label} {ids}.\n{self._store.render()}")
 
     async def close(self) -> None:
         pass

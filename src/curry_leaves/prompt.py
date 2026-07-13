@@ -148,7 +148,8 @@ def _tools_layer(tools: set[str], deferred: list[tuple[str, str]] | None = None)
 TODO_GUIDANCE = """# Task tracking
 When a request needs more than ~2 steps, or spans multiple files, MAINTAIN a live plan with
 the task tools — don't wait to be asked:
-- Before you start, call `task_create` once per step to lay out the full ordered plan.
+- Before you start, call `task_create` ONCE, passing the full ordered plan as its `tasks`
+  array (one entry per step) — don't call it repeatedly, one task per call.
 - As you work, `task_update` each item by id: flip it to `in_progress` when you start it and
   `completed` when it's done. Keep exactly ONE item `in_progress` at a time.
 - Use `task_list` to re-read the plan if you lose track; `task_get` to inspect one item.
