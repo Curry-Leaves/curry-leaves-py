@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.1] - 2026-07-12
+
+### Changed
+
+- **Batched task creation persist** — `task_create` now writes the store to disk
+  once per call instead of once per task. `TaskStore.create_many()` appends the
+  whole batch in memory and calls `_save()` a single time; `create()` delegates
+  to it. Previously a multi-task plan triggered N full file rewrites on a
+  file-backed store. In-memory stores are unaffected; ids and sequencing are
+  unchanged.
+
 ## [2.0.0] - 2026-07-12
 
 ### Changed
