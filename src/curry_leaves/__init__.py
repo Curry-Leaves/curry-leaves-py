@@ -8,7 +8,7 @@ The public API is intentionally tiny — enough to build an agent::
     print(result.output_text)
 """
 
-VERSION = "1.5.0"
+VERSION = "2.0.0"
 
 # ── core: the definition, the driver, the engine ─────────────────────────────
 from .core.agent import Agent, AgentOptions, AgentTool
