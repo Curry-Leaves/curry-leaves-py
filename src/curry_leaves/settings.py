@@ -107,16 +107,11 @@ def resolve_default_model(cwd: str | None = None) -> str:
     return DEFAULT_LOCAL_MODEL
 
 
-def save_model_choice(model: str) -> None:
-    """Remember the user's model choice by writing it to the USER settings file (the same layer
-    as `add_global_approval`). Best-effort; a write failure is swallowed. Reads the user file
-    directly so we only ever touch our own layer, never the merged view.
+def _write_user_settings(next_settings: dict[str, Any]) -> None:
+    """Persist the whole USER settings file. Best-effort — a write failure is swallowed, since
+    recording preferences is never the run's job.
     """
     path = user_settings_path()
-    current = _read_json(path)
-    if current.get("model") == model:
-        return
-    next_settings: dict[str, Any] = {**current, "model": model}
     try:
         dir_ = os.path.dirname(path)
         if dir_ and not os.path.exists(dir_):
@@ -125,6 +120,17 @@ def save_model_choice(model: str) -> None:
             f.write(json.dumps(next_settings, indent=2) + "\n")
     except Exception:
         pass  # best-effort
+
+
+def save_model_choice(model: str) -> None:
+    """Remember the user's model choice by writing it to the USER settings file (the same layer
+    as `add_global_approval`). Best-effort; a write failure is swallowed. Reads the user file
+    directly so we only ever touch our own layer, never the merged view.
+    """
+    current = _read_json(user_settings_path())
+    if current.get("model") == model:
+        return
+    _write_user_settings({**current, "model": model})
 
 
 def global_approvals(cwd: str | None = None) -> list[str]:
@@ -155,8 +161,7 @@ def add_global_approval(tool: str) -> None:
     the run's job). Reads the user file directly (not the merged view) so we only ever write our
     layer.
     """
-    path = user_settings_path()
-    current = _read_json(path)
+    current = _read_json(user_settings_path())
     approvals = current.get("approvals")
     existing = approvals.get("allow") if isinstance(approvals, dict) else None
     allow = set(existing) if isinstance(existing, list) else set()
@@ -164,12 +169,4 @@ def add_global_approval(tool: str) -> None:
         return
     allow.add(tool)
     next_approvals: dict[str, Any] = {**(approvals if isinstance(approvals, dict) else {}), "allow": list(allow)}
-    next_settings: dict[str, Any] = {**current, "approvals": next_approvals}
-    try:
-        dir_ = os.path.dirname(path)
-        if dir_ and not os.path.exists(dir_):
-            os.makedirs(dir_, exist_ok=True)
-        with open(path, "w", encoding="utf8") as f:
-            f.write(json.dumps(next_settings, indent=2) + "\n")
-    except Exception:
-        pass  # best-effort
+    _write_user_settings({**current, "approvals": next_approvals})

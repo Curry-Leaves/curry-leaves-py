@@ -152,8 +152,7 @@ class EventChannel:
         self._queue: asyncio.Queue[Any] = asyncio.Queue()
         self._closed = False
         self._error: BaseException | None = None
-        _sentinel: object = object()
-        self._sentinel = _sentinel
+        self._sentinel: object = object()
 
     def push(self, e: AgentEvent) -> None:
         if self._closed:

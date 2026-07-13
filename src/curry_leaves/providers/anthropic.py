@@ -12,8 +12,6 @@ import json
 import os
 from typing import Any, AsyncIterable, AsyncIterator, Optional
 
-import httpx
-
 from curry_leaves.core.events import Delta
 from curry_leaves.core.messages import (
     AssistantMessage,
@@ -38,8 +36,7 @@ from curry_leaves.providers.base import (
     StreamOpts,
     apply_sampling,
 )
-from curry_leaves.providers.sse import iter_sse
-from curry_leaves.util.retry import HttpError
+from curry_leaves.providers.sse import stream_json_sse
 
 _ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
 _ANTHROPIC_VERSION = "2023-06-01"
@@ -288,30 +285,12 @@ class AnthropicProvider:
             raise RuntimeError("ANTHROPIC_API_KEY not set")
 
         body = build_anthropic_request(ctx, model, opts)
+        headers = {
+            "x-api-key": key,
+            "anthropic-version": _ANTHROPIC_VERSION,
+            "content-type": "application/json",
+        }
 
-        async with httpx.AsyncClient() as client:
-            async with client.stream(
-                "POST",
-                _ANTHROPIC_URL,
-                headers={
-                    "x-api-key": key,
-                    "anthropic-version": _ANTHROPIC_VERSION,
-                    "content-type": "application/json",
-                },
-                json=body,
-                timeout=None,
-            ) as resp:
-                if resp.status_code >= 400:
-                    text = ""
-                    try:
-                        await resp.aread()
-                        text = resp.text
-                    except Exception:
-                        text = ""
-                    raise HttpError(
-                        resp.status_code,
-                        f"Anthropic {resp.status_code}: {text[:500]}",
-                    )
-
-                async for event in parse_anthropic_stream(iter_sse(resp)):
-                    yield event
+        stream = stream_json_sse(_ANTHROPIC_URL, headers, body, label="Anthropic")
+        async for event in parse_anthropic_stream(stream):
+            yield event

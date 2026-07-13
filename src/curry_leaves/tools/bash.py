@@ -9,6 +9,7 @@ from typing import Any
 
 import pydantic
 
+from curry_leaves.core.blobs import truncate_with_blob
 from curry_leaves.core.tools import Risk, Tool, ToolResult
 from curry_leaves.providers.base import Context
 
@@ -98,22 +99,17 @@ class BashTool:
             )
 
         output = out_bytes.decode("utf-8", errors="replace")
-        if len(output) > MAX_OUTPUT_CHARS:
-            preview = output[:MAX_OUTPUT_CHARS]
-            if ctx.blobs is not None:
-                bid = ctx.blobs.put_text(output)
-                output = (
-                    f"{preview}\n... [truncated — full {len(output)} chars stored at "
-                    f"artifact://{bid}; read it with offset/limit]"
-                )
-            else:
-                output = f"{preview}\n... [output truncated]"
+        output = truncate_with_blob(
+            output,
+            MAX_OUTPUT_CHARS,
+            ctx.blobs,
+            stored=lambda bid, total: f"... [truncated — full {total} chars stored at "
+            f"artifact://{bid}; read it with offset/limit]",
+            dropped="... [output truncated]",
+        )
 
         rc = proc.returncode if proc.returncode is not None else 0
         return ToolResult(content=f"(exit {rc})\n{output or '(no output)'}", is_error=rc != 0)
-
-    async def close(self) -> None:
-        pass
 
 
 def bash_tool() -> Tool[Any]:

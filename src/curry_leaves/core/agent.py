@@ -199,6 +199,3 @@ class AgentTool:
             return ToolResult(content=f"(cannot delegate to '{self.name}' here)", is_error=True)
         out = await ctx.spawn(self._agent, args.input)
         return ToolResult(content=out or f"({self.name} returned no output)")
-
-    async def close(self) -> None:
-        pass

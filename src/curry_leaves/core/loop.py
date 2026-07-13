@@ -106,16 +106,14 @@ async def stream_assistant(ctx: Context, cfg: LoopConfig) -> AsyncIterator[Agent
             # Retry only TRANSIENT failures, and only if nothing was streamed yet (retrying
             # mid-stream would duplicate output to the consumer).
             retry = cfg.retry
+            name = type(e).__name__
             if not started and retry is not None and retry.is_transient(e) and attempt < retry.max_attempts:
                 attempt += 1
                 delay = retry.delay(attempt)
-                name = type(e).__name__
                 yield ev.error(f"{name}: retrying in {delay:.1f}s ({attempt}/{retry.max_attempts})", False)
                 await asyncio.sleep(delay)
                 continue
-            name = type(e).__name__
-            msg = str(e)
-            last_error = f"provider error: {name}: {msg}"
+            last_error = f"provider error: {name}: {e}"
             break
 
     # Stream ended without completion, or retries exhausted. Emit a terminal error message.
@@ -181,7 +179,7 @@ async def agent_loop(ctx: Context, cfg: LoopConfig) -> AsyncIterator[AgentEvent]
                 message = empty_assistant(stop_reason="error", error_message="no response from provider")
             ctx.messages.append(message)
 
-            if message.stop_reason == "error" or message.stop_reason == "aborted":
+            if message.stop_reason in ("error", "aborted"):
                 results = _pair_aborted_calls(ctx, message)
                 yield ev.error(message.error_message or message.stop_reason, True)
                 yield ev.turn_end(message, results)
@@ -189,9 +187,7 @@ async def agent_loop(ctx: Context, cfg: LoopConfig) -> AsyncIterator[AgentEvent]
                 return
 
             tool_calls = [b for b in message.content if isinstance(b, ToolCallBlock)]
-            runnable = (
-                message.stop_reason == "tool_use" or message.stop_reason == "stop"
-            ) and len(tool_calls) > 0
+            runnable = message.stop_reason in ("tool_use", "stop") and len(tool_calls) > 0
 
             if not runnable:
                 # A non-runnable stop can still carry tool_use blocks (e.g. "length" truncated

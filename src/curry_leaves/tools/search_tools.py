@@ -45,6 +45,3 @@ class SearchToolsTool:
             self._activate(tool.name)  # advertised from the next turn on
             lines.append(f"- {tool.name}: {tool.description}")
         return ToolResult(content="Found these tools (now available to call):\n" + "\n".join(lines))
-
-    async def close(self) -> None:
-        pass

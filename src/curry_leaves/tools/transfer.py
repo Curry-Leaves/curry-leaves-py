@@ -48,6 +48,3 @@ class TransferTool:
 
     async def run(self, args: TransferArgs, ctx: Context, signal: asyncio.Event) -> ToolResult:
         return ToolResult(content=self._transfer(args.agent))
-
-    async def close(self) -> None:
-        pass

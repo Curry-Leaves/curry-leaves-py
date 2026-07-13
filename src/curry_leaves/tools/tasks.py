@@ -34,6 +34,13 @@ class Task(pydantic.BaseModel):
     status: Status = "pending"
 
 
+def _label(task: "Task") -> str:
+    """The active-form label while in_progress (if set), else the subject."""
+    if task.status == "in_progress" and task.active_form:
+        return task.active_form
+    return task.subject
+
+
 class TaskStore:
     """In-memory by default. Pass `path` to persist across runs (e.g. one file per chat
     session) — every mutation rewrites it, and it's loaded back in on construction.
@@ -101,10 +108,17 @@ class TaskStore:
         done = sum(1 for t in self.tasks if t.status == "completed")
         lines = []
         for t in self.tasks:
-            label = t.active_form if t.status == "in_progress" and t.active_form else t.subject
-            lines.append(f"{_MARK[t.status]} #{t.id} {label}")
+            lines.append(f"{_MARK[t.status]} #{t.id} {_label(t)}")
         body = "\n".join(lines)
         return f"{body}\n({done}/{len(self.tasks)} done)"
+
+
+class _TaskTool:
+    """Shared base for the four task tools: they all close over one `TaskStore` and have
+    no resources to tear down, so the `store`-holding constructor lives here once."""
+
+    def __init__(self, store: TaskStore) -> None:
+        self._store = store
 
 
 # ── task_create ──────────────────────────────────────────────────────────────
@@ -130,7 +144,7 @@ class CreateArgs(pydantic.BaseModel):
     )
 
 
-class TaskCreateTool:
+class TaskCreateTool(_TaskTool):
     name = "task_create"
     risk: Optional[Risk] = "read"
     description = (
@@ -141,17 +155,11 @@ class TaskCreateTool:
     schema: type[pydantic.BaseModel] = CreateArgs
     timeout: Optional[float] = None
 
-    def __init__(self, store: TaskStore) -> None:
-        self._store = store
-
     async def run(self, args: CreateArgs, ctx: Context, signal: asyncio.Event) -> ToolResult:
         created = [self._store.create(spec.subject, spec.active_form) for spec in args.tasks]
         ids = ", ".join(f"#{t.id}" for t in created)
         label = "task" if len(created) == 1 else "tasks"
         return ToolResult(content=f"Created {label} {ids}.\n{self._store.render()}")
-
-    async def close(self) -> None:
-        pass
 
 
 def task_create(store: TaskStore) -> Tool[Any]:
@@ -176,7 +184,7 @@ class UpdateArgs(pydantic.BaseModel):
     )
 
 
-class TaskUpdateTool:
+class TaskUpdateTool(_TaskTool):
     name = "task_update"
     risk: Optional[Risk] = "read"
     description = (
@@ -186,9 +194,6 @@ class TaskUpdateTool:
     )
     schema: type[pydantic.BaseModel] = UpdateArgs
     timeout: Optional[float] = None
-
-    def __init__(self, store: TaskStore) -> None:
-        self._store = store
 
     async def run(self, args: UpdateArgs, ctx: Context, signal: asyncio.Event) -> ToolResult:
         if args.status == "deleted":
@@ -213,9 +218,6 @@ class TaskUpdateTool:
         )
         return ToolResult(content=f"Updated task #{task.id}.\n{self._store.render()}{warn}")
 
-    async def close(self) -> None:
-        pass
-
 
 def task_update(store: TaskStore) -> Tool[Any]:
     return TaskUpdateTool(store)
@@ -228,21 +230,15 @@ class ListArgs(pydantic.BaseModel):
     pass
 
 
-class TaskListTool:
+class TaskListTool(_TaskTool):
     name = "task_list"
     risk: Optional[Risk] = "read"
     description = "Read back the full current task list with ids and statuses."
     schema: type[pydantic.BaseModel] = ListArgs
     timeout: Optional[float] = None
 
-    def __init__(self, store: TaskStore) -> None:
-        self._store = store
-
     async def run(self, args: ListArgs, ctx: Context, signal: asyncio.Event) -> ToolResult:
         return ToolResult(content=self._store.render())
-
-    async def close(self) -> None:
-        pass
 
 
 def task_list(store: TaskStore) -> Tool[Any]:
@@ -256,25 +252,18 @@ class GetArgs(pydantic.BaseModel):
     task_id: str = pydantic.Field(description="The id of the task to read.")
 
 
-class TaskGetTool:
+class TaskGetTool(_TaskTool):
     name = "task_get"
     risk: Optional[Risk] = "read"
     description = "Read one task by id."
     schema: type[pydantic.BaseModel] = GetArgs
     timeout: Optional[float] = None
 
-    def __init__(self, store: TaskStore) -> None:
-        self._store = store
-
     async def run(self, args: GetArgs, ctx: Context, signal: asyncio.Event) -> ToolResult:
         task = self._store.get(args.task_id)
         if task is None:
             return ToolResult(content=f"No task with id #{args.task_id}.", is_error=True)
-        label = task.active_form if task.status == "in_progress" and task.active_form else task.subject
-        return ToolResult(content=f"{_MARK[task.status]} #{task.id} {label} ({task.status})")
-
-    async def close(self) -> None:
-        pass
+        return ToolResult(content=f"{_MARK[task.status]} #{task.id} {_label(task)} ({task.status})")
 
 
 def task_get(store: TaskStore) -> Tool[Any]:

@@ -49,7 +49,6 @@ ACCENT = "#5fbf3a"  # leaf green — bullets, spinner, borders
 GOLD = "#9bcc4a"  # lime — group labels / secondary
 TITLE_ROWS = ["#c8f56a", "#a3e84f", "#77ce35", "#4faf25", "#2f8016"]  # top→bottom gradient
 SPIN_FRAMES = ["✻", "✳", "✶", "✷", "✸", "✹"]
-WORK_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
 
 STATUS_WORD = {"idle": "Ready", "thinking": "Thinking", "working": "Working"}
 

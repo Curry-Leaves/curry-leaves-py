@@ -14,8 +14,6 @@ import json
 import os
 from typing import Any, AsyncIterable, AsyncIterator
 
-import httpx
-
 from curry_leaves.core.events import Delta
 from curry_leaves.core.messages import (
     AssistantMessage,
@@ -40,8 +38,7 @@ from curry_leaves.providers.base import (
     StreamOpts,
     apply_sampling,
 )
-from curry_leaves.providers.sse import iter_sse
-from curry_leaves.util.retry import HttpError
+from curry_leaves.providers.sse import stream_json_sse
 
 OPENAI_BASE_URL = "https://api.openai.com/v1"
 
@@ -311,27 +308,15 @@ class OpenAIProvider:
         if key:
             headers["Authorization"] = f"Bearer {key}"
 
-        async with httpx.AsyncClient() as client:
-            async with client.stream(
-                "POST",
-                f"{self._resolve_base_url()}/chat/completions",
-                headers=headers,
-                json=body,
-                timeout=None,
-            ) as resp:
-                if resp.status_code >= 400:
-                    t = ""
-                    try:
-                        await resp.aread()
-                        t = resp.text
-                    except Exception:
-                        t = ""
-                    raise HttpError(
-                        resp.status_code, f"{self.label} {resp.status_code}: {t[:500]}"
-                    )
-
-                async for event in parse_openai_stream(iter_sse(resp, done_sentinel="[DONE]")):
-                    yield event
+        stream = stream_json_sse(
+            f"{self._resolve_base_url()}/chat/completions",
+            headers,
+            body,
+            label=self.label,
+            done_sentinel="[DONE]",
+        )
+        async for event in parse_openai_stream(stream):
+            yield event
 
 
 class OllamaProvider(OpenAIProvider):

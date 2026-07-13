@@ -50,9 +50,6 @@ class CurrentTimeTool:
             return ToolResult(content=f"Unknown timezone: '{tz_name}'", is_error=True)
         return ToolResult(content=_format(datetime.now(timezone.utc), tz))
 
-    async def close(self) -> None:
-        pass
-
 
 def current_time_tool() -> Tool[Any]:
     return CurrentTimeTool()

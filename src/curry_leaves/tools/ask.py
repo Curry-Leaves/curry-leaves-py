@@ -43,9 +43,6 @@ class AskTool:
             content=f"User answered: {answer}" if answer else "(user gave no answer; proceed with a default)"
         )
 
-    async def close(self) -> None:
-        pass
-
 
 def ask_tool() -> Tool[Any]:
     return AskTool()
