@@ -71,11 +71,19 @@ class TaskStore:
         tmp.replace(self._path)
 
     def create(self, subject: str, active_form: Optional[str] = None) -> Task:
-        self._seq += 1
-        task = Task(id=str(self._seq), subject=subject, active_form=active_form, status="pending")
-        self.tasks.append(task)
+        return self.create_many([(subject, active_form)])[0]
+
+    def create_many(self, specs: list[tuple[str, Optional[str]]]) -> list[Task]:
+        """Append several tasks with a single persist — one `_save()` for the whole
+        batch rather than one per task (matters only when the store is file-backed)."""
+        created: list[Task] = []
+        for subject, active_form in specs:
+            self._seq += 1
+            task = Task(id=str(self._seq), subject=subject, active_form=active_form, status="pending")
+            self.tasks.append(task)
+            created.append(task)
         self._save()
-        return task
+        return created
 
     def get(self, id: str) -> Optional[Task]:
         for t in self.tasks:
@@ -156,7 +164,7 @@ class TaskCreateTool(_TaskTool):
     timeout: Optional[float] = None
 
     async def run(self, args: CreateArgs, ctx: Context, signal: asyncio.Event) -> ToolResult:
-        created = [self._store.create(spec.subject, spec.active_form) for spec in args.tasks]
+        created = self._store.create_many([(spec.subject, spec.active_form) for spec in args.tasks])
         ids = ", ".join(f"#{t.id}" for t in created)
         label = "task" if len(created) == 1 else "tasks"
         return ToolResult(content=f"Created {label} {ids}.\n{self._store.render()}")
