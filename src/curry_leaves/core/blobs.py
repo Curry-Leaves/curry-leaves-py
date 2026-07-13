@@ -11,6 +11,31 @@ This in-memory store lives for the duration of a run tree (shared across subagen
 from __future__ import annotations
 
 import hashlib
+from typing import Callable
+
+
+def truncate_with_blob(
+    text: str,
+    limit: int,
+    blobs: "BlobStore | None",
+    *,
+    stored: Callable[[str, int], str],
+    dropped: str = "... [truncated]",
+) -> str:
+    """Cap `text` at `limit` chars for the model. Under the limit it's returned unchanged;
+    over it, the WHOLE text is offloaded to `blobs` (if present) and the caller keeps a
+    head preview plus a note. `stored(blob_id, total_len)` builds the note when the full
+    text was saved (so it can cite `artifact://<id>`); `dropped` is the fallback note when
+    there's no blob store. Both are appended after the preview on their own line.
+    """
+    if len(text) <= limit:
+        return text
+    preview = text[:limit]
+    if blobs is not None:
+        note = stored(blobs.put_text(text), len(text))
+    else:
+        note = dropped
+    return f"{preview}\n{note}"
 
 
 class BlobStore:

@@ -53,6 +53,3 @@ class TaskTool:
             return ToolResult(content=f"Unknown agent '{args.agent}'. Available: {names}", is_error=True)
         output = await self._spawn(agent, args.prompt)
         return ToolResult(content=output or "(subagent returned no output)")
-
-    async def close(self) -> None:
-        pass

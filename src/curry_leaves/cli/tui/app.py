@@ -237,7 +237,6 @@ class CurryLeavesApp(App[None]):
         super().__init__()
         self.chat = chat
         self.state: State = _init_state(chat)
-        self.usage = _Usage()
         self.compacting = False
         self._busy_started_at: Optional[float] = None
         self._elapsed_seconds = 0
@@ -426,7 +425,6 @@ class CurryLeavesApp(App[None]):
         if cmd == "reset":
             chat.reset()
             self._dispatch(ClearAction())
-            self.usage = _Usage()
             notice(["(new conversation)"])
             return True
         if cmd == "fork":
@@ -525,9 +523,6 @@ class CurryLeavesApp(App[None]):
         try:
             async for e in chat.runner.stream(text):
                 self._dispatch(EventAction(e=e))
-                if e.type == "message_end":
-                    u = chat.runner.usage
-                    self.usage = _Usage(input=u.input, output=u.output, cost=u.cost.total)
         except Exception as err:
             msg = f"{type(err).__name__}: {err}"
             from curry_leaves.core.events import ev

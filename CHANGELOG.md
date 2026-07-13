@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-07-12
+
+### Changed
+
+- **Weight-loss refactor — lighter kernel, no behavior change.** A cleanup pass
+  removed dead code and collapsed duplicated logic into small shared helpers
+  (net −60 lines across 26 files; `mypy --strict` and all tests stay green).
+  - Removed dead symbols confirmed unreferenced: the `Flattened` event model,
+    the never-read `self.usage` writes in the TUI, `initial_state()`,
+    `WORK_FRAMES`, the unused `BLUE`/`MAGENTA` theme colors, a throwaway
+    `_sentinel` local, and the `_Decision` alias (identical to `Verdict`).
+  - Deleted 17 empty `close()` no-ops across the tool suite — the `Tool`
+    protocol already treats `close` as optional (the runner fetches it via
+    `getattr(tool, "close", None)`), so they were pure boilerplate.
+  - Extracted shared helpers to de-duplicate near-identical blocks:
+    `stream_json_sse()` in `providers/sse.py` (the POST-stream + `>=400`
+    error glue both providers repeated; wire-format parsers stay
+    provider-specific), `truncate_with_blob()` in `core/blobs.py` (the
+    large-output offload shared by `bash` and `web_fetch`), a `_TaskTool`
+    base plus a `_label()` helper in `tools/tasks.py`, and
+    `_write_user_settings()` in `settings.py`.
+  - Minor `core/loop.py` readability: stop-reason checks use
+    `in ("tool_use", "stop")` tuples (matching the module docstring) and a
+    duplicated `name =` was hoisted out of the retry branch.
+
 ## [1.5.0] - 2026-07-11
 
 ### Added

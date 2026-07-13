@@ -66,9 +66,6 @@ class FindTool:
         suffix = f"\n... [capped at {args.max_results}; narrow the pattern]" if capped else ""
         return ToolResult(content="\n".join(results) + suffix)
 
-    async def close(self) -> None:
-        pass
-
 
 def find_tool() -> Tool[Any]:
     return FindTool()

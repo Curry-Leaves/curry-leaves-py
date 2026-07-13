@@ -16,8 +16,38 @@ from typing import Any, AsyncIterator
 
 import httpx
 
+from curry_leaves.util.retry import HttpError
+
 _SKIP = object()
 _DONE = object()
+
+
+async def stream_json_sse(
+    url: str,
+    headers: dict[str, str],
+    body: dict[str, Any],
+    *,
+    label: str,
+    done_sentinel: str | None = None,
+) -> AsyncIterator[Any]:
+    """POST `body` to `url` and yield each SSE `data:` payload as parsed JSON. A response
+    status >= 400 is raised as `HttpError` with a `<label> <code>: <body[:500]>` message —
+    the one HTTP/error shape both providers share. Provider-specific request building and
+    stream parsing stay at their own edges; only this glue is centralized here.
+    """
+    async with httpx.AsyncClient() as client:
+        async with client.stream("POST", url, headers=headers, json=body, timeout=None) as resp:
+            if resp.status_code >= 400:
+                text = ""
+                try:
+                    await resp.aread()
+                    text = resp.text
+                except Exception:
+                    text = ""
+                raise HttpError(resp.status_code, f"{label} {resp.status_code}: {text[:500]}")
+
+            async for event in iter_sse(resp, done_sentinel=done_sentinel):
+                yield event
 
 
 async def iter_sse(

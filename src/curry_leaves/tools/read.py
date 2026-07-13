@@ -76,9 +76,6 @@ class ReadTool:
         suffix = "\n... [truncated to 2000 lines; pass offset/limit for more]" if truncated else ""
         return ToolResult(content=body + suffix)
 
-    async def close(self) -> None:
-        pass
-
 
 def read_tool() -> Tool[Any]:
     return ReadTool()

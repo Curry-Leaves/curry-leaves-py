@@ -47,9 +47,6 @@ class WriteTool:
         n_bytes = len(args.content.encode("utf-8"))
         return ToolResult(content=f"Wrote {n_bytes} bytes ({lines} lines) to {args.path}")
 
-    async def close(self) -> None:
-        pass
-
 
 def write_tool() -> Tool[Any]:
     return WriteTool()

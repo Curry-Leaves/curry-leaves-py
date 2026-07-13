@@ -296,13 +296,6 @@ class ev:
         return SubagentActivity(event=event, depth=depth, name=name)
 
 
-class Flattened(BaseModel):
-    model_config = {"arbitrary_types_allowed": True}
-    event: object
-    depth: int
-    name: str
-
-
 def flatten(e: "AgentEvent") -> tuple[object, int, str]:
     """Normalize any event into (event, depth, name).
 

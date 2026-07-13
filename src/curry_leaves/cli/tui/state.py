@@ -156,10 +156,6 @@ class State:
     next_id: int = 0
 
 
-def initial_state() -> State:
-    return State(entries=[], live=None, status="idle", next_id=0)
-
-
 # ── actions the reducer accepts ───────────────────────────────────────────────
 
 

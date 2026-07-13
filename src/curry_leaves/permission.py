@@ -33,7 +33,6 @@ from curry_leaves.core.host import ApproveTool, Host
 from curry_leaves.core.tools import AuthorizeResult, Risk
 
 Verdict = Literal["allow", "ask", "deny"]
-_Decision = Literal["allow", "ask", "deny"]
 
 # Predicate: is a would-be-prompted call CONTAINED enough to auto-approve? (see
 # contained_approval)
@@ -76,7 +75,7 @@ class PermissionEngine:
         """Session-scoped grants made this run (stamped into session meta for audit)."""
         return list(self._session_approvals)
 
-    def _decide(self, tool: str, risk: Risk, permissions: dict[str, Verdict]) -> _Decision:
+    def _decide(self, tool: str, risk: Risk, permissions: dict[str, Verdict]) -> Verdict:
         v = permissions.get(tool)
         if v == "deny":
             return "deny"  # absolute

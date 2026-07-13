@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 import httpx
 import pydantic
 
+from curry_leaves.core.blobs import truncate_with_blob
 from curry_leaves.core.tools import Risk, Tool, ToolResult
 
 if TYPE_CHECKING:
@@ -89,17 +90,13 @@ class WebFetchTool:
             return ToolResult(content=f"Failed to fetch {args.url}: {e}", is_error=True)
 
         text = _html_to_text(body) if "html" in ctype else body
-        if len(text) > _MAX_FETCH_CHARS:
-            preview = text[:_MAX_FETCH_CHARS]
-            if ctx.blobs is not None:
-                bid = ctx.blobs.put_text(text)
-                text = f"{preview}\n... [truncated — full page at artifact://{bid}]"
-            else:
-                text = f"{preview}\n... [truncated]"
+        text = truncate_with_blob(
+            text,
+            _MAX_FETCH_CHARS,
+            ctx.blobs,
+            stored=lambda bid, total: f"... [truncated — full page at artifact://{bid}]",
+        )
         return ToolResult(content=text)
-
-    async def close(self) -> None:
-        pass
 
 
 def web_fetch_tool() -> Tool[Any]:
@@ -137,9 +134,6 @@ class WebSearchTool:
         return ToolResult(
             content="\n\n".join(f"{t}\n{u}\n{s[:200]}" for t, u, s in results)
         )
-
-    async def close(self) -> None:
-        pass
 
 
 def web_search_tool() -> Tool[Any]:

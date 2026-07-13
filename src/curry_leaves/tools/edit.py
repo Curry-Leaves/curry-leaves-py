@@ -90,9 +90,6 @@ class EditTool:
         where = f"{count} occurrences" if args.replace_all else "1 occurrence"
         return ToolResult(content=f"Replaced {where} in {args.path}.")
 
-    async def close(self) -> None:
-        pass
-
 
 def edit_tool() -> EditTool:
     return EditTool()
